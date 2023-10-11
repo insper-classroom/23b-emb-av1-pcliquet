@@ -24,6 +24,8 @@
 #define buzzer_IDX_1	13
 #define buzzer_IDX_MASK_1	(1u<<buzzer_IDX_1)
 
+#define NOTE_B5  988
+#define NOTE_E6  1319
 
 /************************************************************************/
 /* prototypes and types                                                 */
@@ -38,6 +40,12 @@ void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource);
 /************************************************************************/
 
 SemaphoreHandle_t xBtnSemaphore;
+
+/************************************************************************/
+/*Filas								                                     */
+/************************************************************************/
+
+QueueHandle_t xQueueCoins;
 
 
 /************************************************************************/
@@ -63,6 +71,7 @@ extern void vApplicationTickHook(void);
 extern void vApplicationMallocFailedHook(void);
 extern void xPortSysTickHandler(void);
 
+
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask, signed char *pcTaskName) {
 	printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
 	for (;;) {	}
@@ -83,9 +92,7 @@ extern void vApplicationMallocFailedHook(void) {
 void but_callback(void) {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	xSemaphoreGiveFromISR(xBtnSemaphore,xHigherPriorityTaskWoken);
-	srand(23);
-	int numeroAleatorio = (rand() % 3) + 1;
-	printf(" %d \n", numeroAleatorio);
+
 }
 
 
@@ -94,14 +101,63 @@ void but_callback(void) {
 /************************************************************************/
 
 static void task_coins(void *pvParameters){
+	int flag = 0;
 	for(;;){
+	
+		if(xSemaphoreTake(xBtnSemaphore, 1000)){
+// 			int seed = rtt_read_timer_value(RTT);
+// 				
+// 			printf("flag %d \n", flag);
+// 			srand(seed);
 			
+			if(flag != 0){
+
+				int numeroAleatorio = (rand() % 3) + 1;
+				xQueueSendFromISR(xQueueCoins, (void *)&numeroAleatorio, 0);
+ 				printf("Coins: %d \n", numeroAleatorio);
+				
+			}
+			else{
+				int seed = rtt_read_timer_value(RTT);
+				printf("seed %d \n", seed);
+				srand(seed);
+/*				printf("ue deu ruim");*/
+				int numeroAleatorio = (rand() % 3) + 1;
+				xQueueSendFromISR(xQueueCoins, (void *)&numeroAleatorio, 0);
+				printf("Coins: %d \n", numeroAleatorio);
+				flag = 1;
+			}		
+		}
+
 	}
 }
 
+void tone(int freq, int time){
+	double t = 1000000/freq;
+	
+	for(int i = 0; i<= time*100000/t; i++){
+		pio_set(buzzer_1, buzzer_IDX_MASK_1);
+		delay_us(t/2);
+		pio_clear(buzzer_1, buzzer_IDX_MASK_1);
+		delay_us(t/2);
+	}
+
+}
+
 static void task_play(void *pvParameters){
+	int numeroAleatorio;
+	int i= 0;
 	for(;;){
-		
+		if(xQueueReceive(xQueueCoins, &numeroAleatorio, (TickType_t) 0)){
+			while(i<numeroAleatorio){
+				tone(NOTE_B5, 1);
+				tone(NOTE_E6, 4);
+				vTaskDelay(150);
+				i++;
+			}
+			i=0;
+
+		}
 	}
 }
 
@@ -122,6 +178,12 @@ static void task_debug(void *pvParameters) {
 /************************************************************************/
 /* funcoes                                                              */
 /************************************************************************/
+
+void calcula_seed(void){
+	
+}
+
+
 
 void buzz_init(void){
 	pmc_enable_periph_clk(buzzer_1);
@@ -210,6 +272,11 @@ int main(void) {
 		printf("falha em criar o semaforo \n");
 	}
 	
+	xQueueCoins = xQueueCreate(32, sizeof(uint32_t));
+	if (xQueueCoins == NULL){
+		printf("falha em criar a queue Tempo do sensor \n");
+	}
+	
 	/* Initialize the SAM system */
 	sysclk_init();
 	board_init();
@@ -218,11 +285,11 @@ int main(void) {
 	configure_console();
 	btn_init();
 	buzz_init();
-	
-	RTT_init();
+	RTT_init(4,16,0);	
+
 	
 	if (xTaskCreate(task_debug, "debug", TASK_OLED_STACK_SIZE, NULL,
-	TASK_OLED_STACK_PRIORITY+1, NULL) != pdPASS) {
+	TASK_OLED_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create debug task\r\n");
 	}
 	
