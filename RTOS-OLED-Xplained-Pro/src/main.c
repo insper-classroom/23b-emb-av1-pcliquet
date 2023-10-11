@@ -70,7 +70,7 @@ extern void vApplicationIdleHook(void);
 extern void vApplicationTickHook(void);
 extern void vApplicationMallocFailedHook(void);
 extern void xPortSysTickHandler(void);
-
+void tone(int freq, int time);
 
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask, signed char *pcTaskName) {
 	printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
@@ -105,10 +105,7 @@ static void task_coins(void *pvParameters){
 	for(;;){
 	
 		if(xSemaphoreTake(xBtnSemaphore, 1000)){
-// 			int seed = rtt_read_timer_value(RTT);
-// 				
-// 			printf("flag %d \n", flag);
-// 			srand(seed);
+
 			
 			if(flag != 0){
 
@@ -132,17 +129,7 @@ static void task_coins(void *pvParameters){
 	}
 }
 
-void tone(int freq, int time){
-	double t = 1000000/freq;
-	
-	for(int i = 0; i<= time*100000/t; i++){
-		pio_set(buzzer_1, buzzer_IDX_MASK_1);
-		delay_us(t/2);
-		pio_clear(buzzer_1, buzzer_IDX_MASK_1);
-		delay_us(t/2);
-	}
 
-}
 
 static void task_play(void *pvParameters){
 	int numeroAleatorio;
@@ -160,6 +147,8 @@ static void task_play(void *pvParameters){
 		}
 	}
 }
+
+
 
 static void task_debug(void *pvParameters) {
 	gfx_mono_ssd1306_init();
@@ -179,11 +168,20 @@ static void task_debug(void *pvParameters) {
 /* funcoes                                                              */
 /************************************************************************/
 
-void calcula_seed(void){
+
+
+
+void tone(int freq, int time){
+	double t = 1000000/freq;
 	
+	for(int i = 0; i<= time*100000/t; i++){
+		pio_set(buzzer_1, buzzer_IDX_MASK_1);
+		delay_us(t/2);
+		pio_clear(buzzer_1, buzzer_IDX_MASK_1);
+		delay_us(t/2);
+	}
+
 }
-
-
 
 void buzz_init(void){
 	pmc_enable_periph_clk(buzzer_1);
