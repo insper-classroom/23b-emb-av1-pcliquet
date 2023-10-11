@@ -17,8 +17,12 @@
 #define BTN_PIO PIOA
 #define BTN_PIO_ID ID_PIOA
 #define BTN_PIO_PIN 11
-#define BTN_PIO_PIN_MASK (1 << BTN_PIO_PIN)
+#define BTN_PIO_PIN_MASK (1u << BTN_PIO_PIN)
 
+#define buzzer_1 PIOC
+#define buzzer_ID_1	ID_PIOC
+#define buzzer_IDX_1	13
+#define buzzer_IDX_MASK_1	(1u<<buzzer_IDX_1)
 
 
 /************************************************************************/
@@ -27,6 +31,14 @@
 
 void btn_init(void);
 void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource);
+
+
+/************************************************************************/
+/* Semaforos                                           */
+/************************************************************************/
+
+SemaphoreHandle_t xBtnSemaphore;
+
 
 /************************************************************************/
 /* rtos vars                                                            */
@@ -38,6 +50,12 @@ void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource);
 /************************************************************************/
 #define TASK_OLED_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
 #define TASK_OLED_STACK_PRIORITY            (tskIDLE_PRIORITY)
+
+#define TASK_COINS_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
+#define TASK_COINS_STACK_PRIORITY            (tskIDLE_PRIORITY)
+
+#define TASK_PLAY_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
+#define TASK_PLAY_STACK_PRIORITY            (tskIDLE_PRIORITY)
 
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,  signed char *pcTaskName);
 extern void vApplicationIdleHook(void);
@@ -63,7 +81,11 @@ extern void vApplicationMallocFailedHook(void) {
 /************************************************************************/
 
 void but_callback(void) {
-
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	xSemaphoreGiveFromISR(xBtnSemaphore,xHigherPriorityTaskWoken);
+	srand(23);
+	int numeroAleatorio = (rand() % 3) + 1;
+	printf(" %d \n", numeroAleatorio);
 }
 
 
@@ -71,6 +93,17 @@ void but_callback(void) {
 /* TASKS                                                                */
 /************************************************************************/
 
+static void task_coins(void *pvParameters){
+	for(;;){
+			
+	}
+}
+
+static void task_play(void *pvParameters){
+	for(;;){
+		
+	}
+}
 
 static void task_debug(void *pvParameters) {
 	gfx_mono_ssd1306_init();
@@ -89,6 +122,12 @@ static void task_debug(void *pvParameters) {
 /************************************************************************/
 /* funcoes                                                              */
 /************************************************************************/
+
+void buzz_init(void){
+	pmc_enable_periph_clk(buzzer_1);
+	pio_set_output(buzzer_1,buzzer_IDX_MASK_1,0,0,0);
+}
+
 
 void btn_init(void) {
 	// Inicializa clock do periférico PIO responsavel pelo botao
@@ -166,15 +205,34 @@ static void configure_console(void) {
 /* main                                                                 */
 /************************************************************************/
 int main(void) {
+	xBtnSemaphore = xSemaphoreCreateBinary();
+	if (xBtnSemaphore == NULL){
+		printf("falha em criar o semaforo \n");
+	}
+	
 	/* Initialize the SAM system */
 	sysclk_init();
 	board_init();
 
 	/* Initialize the console uart */
 	configure_console();
+	btn_init();
+	buzz_init();
+	
+	RTT_init();
 	
 	if (xTaskCreate(task_debug, "debug", TASK_OLED_STACK_SIZE, NULL,
-	TASK_OLED_STACK_PRIORITY, NULL) != pdPASS) {
+	TASK_OLED_STACK_PRIORITY+1, NULL) != pdPASS) {
+		printf("Failed to create debug task\r\n");
+	}
+	
+	if (xTaskCreate(task_play, "play", TASK_PLAY_STACK_SIZE, NULL,
+	TASK_PLAY_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create debug task\r\n");
+	}
+	
+	if (xTaskCreate(task_coins, "coins", TASK_COINS_STACK_SIZE, NULL,
+	TASK_COINS_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create debug task\r\n");
 	}
 
