@@ -143,6 +143,7 @@ static void task_play(void *pvParameters){
 				i++;
 			}
 			i=0;
+			vTaskDelay(150);
 
 		}
 	}
